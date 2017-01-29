@@ -70,7 +70,7 @@ metadata {
 			state "heat", action:"switchMode",  nextState: "updating", icon: "st.thermostat.heat"
 			state "cool", action:"switchMode",  nextState: "updating", icon: "st.thermostat.cool"
 			state "auto", action:"switchMode",  nextState: "updating", icon: "st.thermostat.auto"
-            state "smart", action:"switchMode",  nextState: "updating", icon: "st.Weather.weather2"
+			state "smart", action:"switchMode",  nextState: "updating", icon: "st.Weather.weather2"
 			state "auxHeatOnly", action:"switchMode", icon: "st.thermostat.emergency-heat"
 			state "updating", label:"Working", icon: "st.secondary.secondary"
 		}
