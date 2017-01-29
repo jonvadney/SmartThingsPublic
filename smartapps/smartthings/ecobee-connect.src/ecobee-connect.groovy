@@ -19,6 +19,7 @@
  *      JLH - 01-23-2014 - Update for Correct SmartApp URL Format
  *      JLH - 02-15-2014 - Fuller use of ecobee API
  *      10-28-2015 DVCSMP-604 - accessory sensor, DVCSMP-1174, DVCSMP-1111 - not respond to routines
+ *      JJV - 01-28-2017 - Add smart mode which changes the heat/cool mode based on forcast
  */
 definition(
 		name: "Ecobee (Connect)",
@@ -88,6 +89,12 @@ def authPage() {
 					paragraph "Tap below to see the list of ecobee sensors available in your ecobee account and select the ones you want to connect to SmartThings."
 					input(name: "ecobeesensors", title:"Select Ecobee Sensors (${numFound} found)", type: "enum", required:false, description: "Tap to choose", multiple:true, options:options)
 				}
+			}
+            
+			section("") {
+				paragraph "Allows the thermostat to be set in Smart Mode.  Smart mode will attempt to maintain a temperature by changing the mode based on forecast temperature.  If the forecast differs from the temp to maintain by more than 2 degrees the mode will be changed.   As a failsafe the mode will also change if the actual temp is 4 degrees from the desired temp regardless of the forecast."
+				input(name: "smartModeSupport", title:"", type: "boolean", required:true, defaultValue: false, description: "Smart Mode")
+				//input(name: "smartTemp", title:"", type: "number", required:true, defaultValue: 74, range: "60..90", description: "Temperature")
 			}
 		}
 	}
@@ -391,7 +398,8 @@ def pollChildren(child = null) {
             includeExtendedRuntime: true,
             includeSettings: true,
             includeRuntime: true,
-            includeSensors: true
+            includeSensors: true,
+			includeWeather: true
         ]
     ]
 
@@ -454,6 +462,69 @@ def pollChild() {
 
 void poll() {
 	pollChild()
+	pollSmartMode()
+}
+
+void pollSmartMode() {
+	log.debug "smartModeSupport: $smartModeSupport"
+	if (smartModeSupport == "true") {
+
+		atomicState.thermostats.each {stat ->
+			def dni = stat.key
+            def tData = atomicState.thermostats[dni]
+
+			def currentWeatherTemperature = tData.data.currentWeatherTemperature
+			def currentInsideTemperature = tData.data.temperature
+			def desiredTemperature = 74
+
+			log.debug "Inside Temp: $currentInsideTemperature, Forcast Temp: $currentWeatherTemperature"
+			if (currentWeatherTemperature != null && currentInsideTemperature != null) {
+				def diffBetweenDesiredAndActualInside = (currentInsideTemperature - desiredTemperature).abs()
+				def diffBetweenDesiredAndWeatherOutside = (currentInsideTemperature - currentWeatherTemperature).abs()
+
+				log.debug "Desired Temp: $desiredTemperature, Actual/Desired Diff: $diffBetweenDesiredAndActualInside, Outside/Inside Diff: $diffBetweenDesiredAndWeatherOutside"
+
+				if (diffBetweenDesiredAndActualInside > 4) {
+					handleSmartModeChange(dni, desiredTemperature, currentInsideTemperature)
+				} else if (diffBetweenDesiredAndWeatherOutside > 2) {
+					handleSmartModeChange(dni, desiredTemperature, currentWeatherTemperature)
+				}
+			}
+		}    
+	}
+}
+
+void handleSmartModeChange(dni, desiredTemperature, tempRelativeToDesiredTemperature) {
+
+	def d = getChildDevice(dni)
+	def tData = atomicState.thermostats[dni]
+    def deviceId = d.deviceNetworkId.split(/\./).last()
+    
+    log.debug "Setting SmartMode (Current Mode: $tData.data.thermostatMode, Desired Temp: $desiredTemperature, Relative Temp: $tempRelativeToDesiredTemperature)"
+    if (desiredTemperature < tempRelativeToDesiredTemperature) {
+    	if (tData.data.thermostatMode != "cool") {
+            log.debug "SmartMode Change: cool to $desiredTemperature"
+    		d.generateEvent(name: "SmartModeChange", value: "SmartMode Change: cool to $desiredTemperature")
+            setMode("cool", deviceId)
+        } else {
+        	log.debug "SmartMode is already set to cool"
+        }
+    } else if (desiredTemperature > tempRelativeToDesiredTemperature) {
+    	if (tData.data.thermostatMode != "heat") {
+        	log.debug "SmartMode Change: heat to $desiredTemperature"
+    		d.generateEvent(name: "SmartModeChange", value: "SmartMode Change: heat to $desiredTemperature")
+            setMode("heat", deviceId)
+        } else {
+        	log.debug "SmartMode is already set to heat"
+        }
+    } else {
+    	log.warn "Got into handleSmartModeChange without a change needed"
+    }
+    
+	if (tData.data.coolingSetpoint != desiredTemperature) {
+		log.debug "Setting Smart Temp: $desiredTemperature, current setpoint: $tData.data.coolingSetpoint"
+		setHold(desiredTemperature, desiredTemperature, deviceId, "indefinite")
+	}
 }
 
 def availableModes(child) {
@@ -482,6 +553,9 @@ def availableModes(child) {
     }
     if (tData.data.auxHeatMode) {
         modes.add("auxHeatOnly")
+    }
+    if (smartModeSupport == "true") {
+    	//modes.add("smart")
     }
 
     return modes
@@ -851,6 +925,17 @@ private void storeThermostatData(thermostats) {
             humidity: stat.runtime.actualHumidity,
             thermostatFanMode: stat.runtime.desiredFanMode
         ]
+        
+		if (stat.weather && stat.weather.forecasts) {
+			def numberOfForcasts = stat.weather.forecasts.size()
+			if (numberOfForcasts > 0) {
+				def currentWeather = stat.weather.forecasts[0]
+				data["currentWeatherTemperature"] = (currentWeather.temperature / 10)
+			}
+		} else {
+			data["currentWeatherTemperature"] = 0
+		}
+        
         if (location.temperatureScale == "F") {
             data["temperature"] = data["temperature"] ? Math.round(data["temperature"].toDouble()) : data["temperature"]
             data["heatingSetpoint"] = data["heatingSetpoint"] ? Math.round(data["heatingSetpoint"].toDouble()) : data["heatingSetpoint"]
@@ -859,7 +944,7 @@ private void storeThermostatData(thermostats) {
             data["maxHeatingSetpoint"] = data["maxHeatingSetpoint"] ? Math.round(data["maxHeatingSetpoint"].toDouble()) : data["maxHeatingSetpoint"]
             data["minCoolingSetpoint"] = data["minCoolingSetpoint"] ? Math.round(data["minCoolingSetpoint"].toDouble()) : data["minCoolingSetpoint"]
             data["maxCoolingSetpoint"] = data["maxCoolingSetpoint"] ? Math.round(data["maxCoolingSetpoint"].toDouble()) : data["maxCoolingSetpoint"]
-
+			data["currentWeatherTemperature"] = data["currentWeatherTemperature"] ? Math.round(data["currentWeatherTemperature"].toDouble()) : data["currentWeatherTemperature"]
         }
 
         if (data?.deviceTemperatureUnit == false && location.temperatureScale == "F") {
