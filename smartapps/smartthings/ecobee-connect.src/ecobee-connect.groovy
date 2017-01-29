@@ -473,30 +473,30 @@ void pollSmartMode() {
 
 		atomicState.thermostats.each {stat ->
 			def dni = stat.key
-            def tData = atomicState.thermostats[dni]
+			def tData = atomicState.thermostats[dni]
 			def stData = atomicState.smartThermostats[dni]
 
 			log.debug "smartMode[$dni]: ($stData.data)"
 			if (stData.data.smartMode) {
-                def currentWeatherTemperature = tData.data.currentWeatherTemperature
-                def currentInsideTemperature = tData.data.temperature
-                def desiredTemperature = stData.data.smartSetpoint
+				def currentWeatherTemperature = tData.data.currentWeatherTemperature
+				def currentInsideTemperature = tData.data.temperature
+				def desiredTemperature = stData.data.smartSetpoint
 
-                log.debug "Inside Temp: $currentInsideTemperature, Forcast Temp: $currentWeatherTemperature"
-                if (currentWeatherTemperature != null && currentInsideTemperature != null) {
-                    def diffBetweenDesiredAndActualInside = (currentInsideTemperature - desiredTemperature).abs()
-                    def diffBetweenDesiredAndWeatherOutside = (currentInsideTemperature - currentWeatherTemperature).abs()
+				log.debug "Inside Temp: $currentInsideTemperature, Forcast Temp: $currentWeatherTemperature"
+				if (currentWeatherTemperature != null && currentInsideTemperature != null) {
+					def diffBetweenDesiredAndActualInside = (currentInsideTemperature - desiredTemperature).abs()
+					def diffBetweenDesiredAndWeatherOutside = (currentInsideTemperature - currentWeatherTemperature).abs()
 
-                    log.debug "Desired Temp: $desiredTemperature, Actual/Desired Diff: $diffBetweenDesiredAndActualInside, Outside/Inside Diff: $diffBetweenDesiredAndWeatherOutside"
+					log.debug "Desired Temp: $desiredTemperature, Actual/Desired Diff: $diffBetweenDesiredAndActualInside, Outside/Inside Diff: $diffBetweenDesiredAndWeatherOutside"
 
-                    if (diffBetweenDesiredAndActualInside > 4) {
-                        handleSmartModeChange(dni, desiredTemperature, currentInsideTemperature)
-                    } else if (diffBetweenDesiredAndWeatherOutside > 2) {
-                        handleSmartModeChange(dni, desiredTemperature, currentWeatherTemperature)
-                    }
-                }
+					if (diffBetweenDesiredAndActualInside > 4) {
+						handleSmartModeChange(dni, desiredTemperature, currentInsideTemperature)
+					} else if (diffBetweenDesiredAndWeatherOutside > 2) {
+						handleSmartModeChange(dni, desiredTemperature, currentWeatherTemperature)
+					}
+				}
 			}
-		}    
+		}
 	}
 }
 
@@ -504,34 +504,34 @@ void handleSmartModeChange(dni, desiredTemperature, tempRelativeToDesiredTempera
 
 	def d = getChildDevice(dni)
 	def tData = atomicState.thermostats[dni]
-    def deviceId = d.deviceNetworkId.split(/\./).last()
+	def deviceId = d.deviceNetworkId.split(/\./).last()
     
-    log.debug "Setting SmartMode (Current Mode: $tData.data.realThermostatMode, Desired Temp: $desiredTemperature, Relative Temp: $tempRelativeToDesiredTemperature)"
-    if (desiredTemperature < tempRelativeToDesiredTemperature) {
-    	if (tData.data.realThermostatMode != "cool") {
-            log.debug "SmartMode Change: cool to $desiredTemperature"
-    		d.generateEvent(name: "SmartModeChange", value: "SmartMode Change: cool to $desiredTemperature")
-            setRealMode("cool", deviceId)
-        } else {
-        	log.debug "SmartMode is already set to cool"
-        }
-    } else if (desiredTemperature > tempRelativeToDesiredTemperature) {
-    	if (tData.data.realThermostatMode != "heat") {
-        	log.debug "SmartMode Change: heat to $desiredTemperature"
-    		d.generateEvent(name: "SmartModeChange", value: "SmartMode Change: heat to $desiredTemperature")
-            setRealMode("heat", deviceId)
-        } else {
-        	log.debug "SmartMode is already set to heat"
-        }
-    } else {
-    	log.warn "Got into handleSmartModeChange without a change needed"
-    }
-    
+	log.debug "Setting SmartMode (Current Mode: $tData.data.realThermostatMode, Desired Temp: $desiredTemperature, Relative Temp: $tempRelativeToDesiredTemperature)"
+	if (desiredTemperature < tempRelativeToDesiredTemperature) {
+		if (tData.data.realThermostatMode != "cool") {
+			log.debug "SmartMode Change: cool to $desiredTemperature"
+			d.generateEvent(name: "SmartModeChange", value: "SmartMode Change: cool to $desiredTemperature")
+			setRealMode("cool", deviceId)
+		} else {
+			log.debug "SmartMode is already set to cool"
+		}
+	} else if (desiredTemperature > tempRelativeToDesiredTemperature) {
+		if (tData.data.realThermostatMode != "heat") {
+			log.debug "SmartMode Change: heat to $desiredTemperature"
+			d.generateEvent(name: "SmartModeChange", value: "SmartMode Change: heat to $desiredTemperature")
+			setRealMode("heat", deviceId)
+		} else {
+			log.debug "SmartMode is already set to heat"
+		}
+	} else {
+		log.warn "Got into handleSmartModeChange without a change needed"
+	}
+
 	if (tData.data.coolingSetpoint != desiredTemperature) {
 		log.debug "Setting Smart Temp: $desiredTemperature, current setpoint: $tData.data.coolingSetpoint"
 		setHold(desiredTemperature, desiredTemperature, deviceId, "indefinite")
 	} else {
-    	log.debug "SmartMode Temp is already set to $desiredTemperature"
+		log.debug "SmartMode Temp is already set to $desiredTemperature"
 	}
 }
 
@@ -852,7 +852,7 @@ boolean setRealMode(mode, deviceId) {
         ]
     ]
     
-    return sendCommandToEcobee(payload)
+	return sendCommandToEcobee(payload)
 }
 
 /**
@@ -950,7 +950,7 @@ private void storeThermostatData(thermostats) {
     def data
     atomicState.thermostats = thermostats.inject([:]) { collector, stat ->
         def dni = [ app.id, stat.identifier ].join('.')
-		def stData = atomicState.smartThermostats[dni]
+        def stData = atomicState.smartThermostats[dni]
         log.debug "updating dni $dni"
 
         data = [
@@ -973,15 +973,15 @@ private void storeThermostatData(thermostats) {
             thermostatFanMode: stat.runtime.desiredFanMode
         ]
         
-		if (stat.weather && stat.weather.forecasts) {
-			def numberOfForcasts = stat.weather.forecasts.size()
-			if (numberOfForcasts > 0) {
-				def currentWeather = stat.weather.forecasts[0]
-				data["currentWeatherTemperature"] = (currentWeather.temperature / 10)
-			}
-		} else {
-			data["currentWeatherTemperature"] = 0
-		}
+        if (stat.weather && stat.weather.forecasts) {
+            def numberOfForcasts = stat.weather.forecasts.size()
+            if (numberOfForcasts > 0) {
+                def currentWeather = stat.weather.forecasts[0]
+                data["currentWeatherTemperature"] = (currentWeather.temperature / 10)
+            }
+        } else {
+            data["currentWeatherTemperature"] = 0
+        }
         
         if (location.temperatureScale == "F") {
             data["temperature"] = data["temperature"] ? Math.round(data["temperature"].toDouble()) : data["temperature"]
@@ -991,7 +991,7 @@ private void storeThermostatData(thermostats) {
             data["maxHeatingSetpoint"] = data["maxHeatingSetpoint"] ? Math.round(data["maxHeatingSetpoint"].toDouble()) : data["maxHeatingSetpoint"]
             data["minCoolingSetpoint"] = data["minCoolingSetpoint"] ? Math.round(data["minCoolingSetpoint"].toDouble()) : data["minCoolingSetpoint"]
             data["maxCoolingSetpoint"] = data["maxCoolingSetpoint"] ? Math.round(data["maxCoolingSetpoint"].toDouble()) : data["maxCoolingSetpoint"]
-			data["currentWeatherTemperature"] = data["currentWeatherTemperature"] ? Math.round(data["currentWeatherTemperature"].toDouble()) : data["currentWeatherTemperature"]
+            data["currentWeatherTemperature"] = data["currentWeatherTemperature"] ? Math.round(data["currentWeatherTemperature"].toDouble()) : data["currentWeatherTemperature"]
         }
 
         if (data?.deviceTemperatureUnit == false && location.temperatureScale == "F") {
