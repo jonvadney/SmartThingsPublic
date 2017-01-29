@@ -70,6 +70,7 @@ metadata {
 			state "heat", action:"switchMode",  nextState: "updating", icon: "st.thermostat.heat"
 			state "cool", action:"switchMode",  nextState: "updating", icon: "st.thermostat.cool"
 			state "auto", action:"switchMode",  nextState: "updating", icon: "st.thermostat.auto"
+            state "smart", action:"switchMode",  nextState: "updating", icon: "st.Weather.weather2"
 			state "auxHeatOnly", action:"switchMode", icon: "st.thermostat.emergency-heat"
 			state "updating", label:"Working", icon: "st.secondary.secondary"
 		}
@@ -172,7 +173,7 @@ def generateEvent(Map results) {
 			}  else if (name=="maxCoolingSetpoint" || name=="minCoolingSetpoint" || name=="maxHeatingSetpoint" || name=="minHeatingSetpoint") {
 				def sendValue =  location.temperatureScale == "C"? roundC(convertFtoC(value.toDouble())) : value.toInteger()
 				event << [value: sendValue, unit: temperatureScale, displayed: false]
-			}  else if (name=="heatMode" || name=="coolMode" || name=="autoMode" || name=="auxHeatMode"){
+			}  else if (name=="heatMode" || name=="coolMode" || name=="autoMode" || name=="auxHeatMode" || name=="smartMode"){
 				isChange = isStateChange(device, name, value.toString())
 				event << [value: value.toString(), isStateChange: isChange, displayed: false]
 			}  else if (name=="thermostatFanMode"){
@@ -493,6 +494,20 @@ def auto() {
 	generateStatusEvent()
 }
 
+def smart() {
+	log.debug "smart"
+	def deviceId = device.deviceNetworkId.split(/\./).last()
+	if (parent.setMode ("smart", deviceId))
+		generateModeEvent("smart")
+	else {
+		log.debug "Error setting new mode."
+		def currentMode = device.currentState("thermostatMode")?.value
+		generateModeEvent(currentMode) // reset the tile back
+	}
+	generateSetpointEvent()
+	generateStatusEvent()
+}
+
 def fanOn() {
 	log.debug "fanOn"
 	String fanMode = "on"
@@ -576,8 +591,7 @@ def generateSetpointEvent() {
 
 	if (mode == "heat") {
 		sendEvent("name":"thermostatSetpoint", "value":heatingSetpoint, "unit":location.temperatureScale)
-	}
-	else if (mode == "cool") {
+	} else if (mode == "cool") {
 		sendEvent("name":"thermostatSetpoint", "value":coolingSetpoint, "unit":location.temperatureScale)
 	} else if (mode == "auto") {
 		sendEvent("name":"thermostatSetpoint", "value":"Auto")
@@ -585,6 +599,8 @@ def generateSetpointEvent() {
 		sendEvent("name":"thermostatSetpoint", "value":"Off")
 	} else if (mode == "auxHeatOnly") {
 		sendEvent("name":"thermostatSetpoint", "value":heatingSetpoint, "unit":location.temperatureScale)
+	} else if (mode == "smart") {
+		sendEvent("name":"thermostatSetpoint", "value":coolingSetpoint, "unit":location.temperatureScale)
 	}
 }
 
@@ -621,9 +637,9 @@ void raiseSetpoint() {
 		targetvalue = thermostatSetpoint ? thermostatSetpoint : 0
 		targetvalue = location.temperatureScale == "F"? targetvalue + 1 : targetvalue + 0.5
 
-		if ((mode == "heat" || mode == "auxHeatOnly") && targetvalue > maxHeatingSetpoint) {
+		if ((mode == "heat" || mode == "auxHeatOnly" || mode == "smart") && targetvalue > maxHeatingSetpoint) {
 			targetvalue = maxHeatingSetpoint
-		} else if (mode == "cool" && targetvalue > maxCoolingSetpoint) {
+		} else if ((mode == "cool" || mode == "smart") && targetvalue > maxCoolingSetpoint) {
 			targetvalue = maxCoolingSetpoint
 		}
 
@@ -666,9 +682,9 @@ void lowerSetpoint() {
 		targetvalue = thermostatSetpoint ? thermostatSetpoint : 0
 		targetvalue = location.temperatureScale == "F"? targetvalue - 1 : targetvalue - 0.5
 
-		if ((mode == "heat" || mode == "auxHeatOnly") && targetvalue < minHeatingSetpoint) {
+		if ((mode == "heat" || mode == "auxHeatOnly" || mode == "smart") && targetvalue < minHeatingSetpoint) {
 			targetvalue = minHeatingSetpoint
-		} else if (mode == "cool" && targetvalue < minCoolingSetpoint) {
+		} else if ((mode == "cool" || mode == "smart") && targetvalue < minCoolingSetpoint) {
 			targetvalue = minCoolingSetpoint
 		}
 
@@ -714,7 +730,7 @@ void alterSetpoint(temp) {
 				targetHeatingSetpoint = temp.value
 				targetCoolingSetpoint = coolingSetpoint
 			}
-		} else if (mode == "cool") {
+		} else if (mode == "cool" || mode == "smart") {
 			//enforce limits before sending request to cloud
 			if (temp.value < heatingSetpoint){
 				targetHeatingSetpoint = temp.value
@@ -782,6 +798,8 @@ def generateStatusEvent() {
 		statusText = "Right Now: Off"
 	} else if (mode == "auxHeatOnly") {
 		statusText = "Emergency Heat"
+	} else if (mode == "smart") {
+		statusText = "Smart"
 	} else {
 		statusText = "?"
 	}
