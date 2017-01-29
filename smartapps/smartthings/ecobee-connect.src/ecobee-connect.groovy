@@ -323,7 +323,7 @@ def initialize() {
 	
 	def smartThermostats = [:]
 	def devices = thermostats.collect { dni ->
-		smartThermostats[dni] = [data:[smartMode:true, smartSetpoint:74]]
+		smartThermostats[dni] = [data:[smartMode:false, smartSetpoint:74]]
 		def d = getChildDevice(dni)
 		if(!d) {
 			d = addChildDevice(app.namespace, getChildName(), dni, null, ["label":"${atomicState.thermostats[dni]}" ?: "Ecobee Thermostat"])
